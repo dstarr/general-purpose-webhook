@@ -1,46 +1,48 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.Cosmos;
+using Microsoft.Azure.WebJobs;
+using Microsoft.Azure.WebJobs.Extensions.Http;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using System;
 using System.IO;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.Http;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Azure.Cosmos;
-using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 
-namespace SaaSWebhook
+namespace GPWebhook
 {
     public static class Webhook
     {
+        private static ILogger _log;
+
         [FunctionName("resource")]
         public static async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)] HttpRequest req,
             ILogger log)
         {
-            log.LogInformation("Webhook invoked.");
 
+            _log = log;
+            
+            _log.LogInformation("Webhook invoked.");
             var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            log.LogInformation(requestBody);
-
             dynamic body = JsonConvert.DeserializeObject(requestBody);
 
             var itemToStore = new { 
                 id = Guid.NewGuid().ToString(), 
-                payload = body 
+                payloadBody = body 
             };
 
-            log.LogInformation("Saving JSON");
             await StorePayload(itemToStore);
-            log.LogInformation("Saved JSON");
-
+            
             return new OkResult();
         }
 
         private static async Task StorePayload(dynamic item)
         {
-            var databaseName = "WebhookPayloads";
-            var containerName = "Requests";
+            var databaseName = Environment.GetEnvironmentVariable("DatabaseName"); 
+            var containerName = Environment.GetEnvironmentVariable("ContainerName");
+
+            _log.LogInformation("Saving JSON");
 
             var cosmosClient = GetCosmosClient();
 
@@ -48,13 +50,15 @@ namespace SaaSWebhook
             var container = await database.Database.CreateContainerIfNotExistsAsync(containerName, "/id");
 
             await container.Container.CreateItemAsync(item);
+
+            _log.LogInformation("Saved JSON");
         }
 
         private static CosmosClient GetCosmosClient()
         {
             var applicationName = "Webhook";
-            var primaryKey = Environment.GetEnvironmentVariable("PrimaryKey");
-            var endpointUri = Environment.GetEnvironmentVariable("EndpointUri");
+            var primaryKey = Environment.GetEnvironmentVariable("CosmosPrimaryKey");
+            var endpointUri = Environment.GetEnvironmentVariable("CosmosEndpoint");
 
             return new CosmosClient(endpointUri, primaryKey, new CosmosClientOptions()
             {
