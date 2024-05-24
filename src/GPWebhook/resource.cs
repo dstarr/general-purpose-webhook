@@ -22,8 +22,9 @@ namespace GPWebhook
         {
 
             _log = log;
-            
             _log.LogInformation("Webhook invoked.");
+
+            // read the request body
             var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
             dynamic body = JsonConvert.DeserializeObject(requestBody);
 
@@ -39,10 +40,10 @@ namespace GPWebhook
 
         private static async Task StorePayload(dynamic item)
         {
+            _log.LogInformation("Saving JSON");
+            
             var databaseName = Environment.GetEnvironmentVariable("DatabaseName"); 
             var containerName = Environment.GetEnvironmentVariable("ContainerName");
-
-            _log.LogInformation("Saving JSON");
 
             var cosmosClient = GetCosmosClient();
 
